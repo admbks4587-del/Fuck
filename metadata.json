@@ -1,0 +1,6 @@
+{
+  "name": "InfiniteBook AI",
+  "description": "Professional long-form book and novel publishing studio with unlimited chapters, continuity engine, automatic illustrations, and A4 PDF export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
