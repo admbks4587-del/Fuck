@@ -29,7 +29,7 @@ abstract class BookDatabase : RoomDatabase() {
                     BookDatabase::class.java,
                     "infinite_book_database"
                 )
-                    .fallbackToDestructiveMigration(false)
+                    .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
                 instance
