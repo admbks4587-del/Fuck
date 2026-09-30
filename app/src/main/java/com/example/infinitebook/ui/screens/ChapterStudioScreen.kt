@@ -97,6 +97,10 @@ fun ChapterStudioScreen(
     val selectedChapterNum by viewModel.selectedChapterNum.collectAsState()
     val generationProgress by viewModel.generationProgress.collectAsState()
     val illustrations by viewModel.illustrations.collectAsState()
+    val outline by viewModel.outline.collectAsState()
+    val duplicateReports by viewModel.duplicateReports.collectAsState()
+    val isAuditing by viewModel.isAuditing.collectAsState()
+    val auditPassed by viewModel.auditPassed.collectAsState()
 
     val currentChIllustrations = illustrations.filter { it.chapterNumber == selectedChapterNum }
 
@@ -309,6 +313,156 @@ fun ChapterStudioScreen(
                                         fontSize = 11.sp
                                     )
                                 )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // STRICT UNIQUE-CONTENT ENGINE & FULL BOOK GENERATION DESK
+            item {
+                val completedPages = outline.count { it.status == "COMPLETED" }
+                val targetPages = maxOf(1, book?.targetPages ?: 1)
+                val outlineProgress = (completedPages.toFloat() / targetPages).coerceIn(0f, 1f)
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = StudioCardBg),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, GoldPrimary.copy(alpha = 0.6f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "STRICT UNIQUE-CONTENT ENGINE",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = GoldPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                )
+                            )
+                            Surface(
+                                color = if (auditPassed) EmeraldSuccess.copy(alpha = 0.2f) else AmberAccent.copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(6.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, if (auditPassed) EmeraldSuccess else AmberAccent)
+                            ) {
+                                Text(
+                                    text = if (auditPassed) "100% UNIQUE • AUDIT PASSED" else "QUOTA: 450 WDS/PG",
+                                    color = if (auditPassed) EmeraldSuccess else AmberAccent,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Master Outline Quota: $completedPages / $targetPages Pages Generated (${(outlineProgress * 100).toInt()}%)",
+                            style = MaterialTheme.typography.bodySmall.copy(color = ParchmentWhite, fontWeight = FontWeight.SemiBold)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        LinearProgressIndicator(
+                            progress = { outlineProgress },
+                            color = GoldPrimary,
+                            trackColor = StudioCardBorder,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = { viewModel.startFullBookGeneration() },
+                                colors = ButtonDefaults.buttonColors(containerColor = GoldPrimary),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(44.dp)
+                                    .testTag("generate_full_book_btn")
+                            ) {
+                                Icon(Icons.Default.AutoStories, contentDescription = null, tint = StudioObsidian)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Generate Full Book",
+                                    color = StudioObsidian,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            }
+
+                            OutlinedButton(
+                                onClick = { viewModel.generateNextPage() },
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = GoldLight),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, GoldPrimary),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .height(44.dp)
+                                    .testTag("generate_next_page_btn")
+                            ) {
+                                Text("+1 Page", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            }
+
+                            OutlinedButton(
+                                onClick = { viewModel.runDuplicateAudit() },
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = ParchmentMuted),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, StudioCardBorder),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .height(44.dp)
+                                    .testTag("run_audit_btn")
+                            ) {
+                                Text("Audit", fontSize = 13.sp)
+                            }
+                        }
+
+                        if (duplicateReports.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Surface(
+                                color = AmberAccent.copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(8.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, AmberAccent),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Warning, contentDescription = null, tint = AmberAccent, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "${duplicateReports.size} Duplicate Warnings Detected",
+                                            color = AmberAccent,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Duplicate check flagged similar paragraphs or repeated headings. Auto-fix will regenerate with alternative angles at temp 0.9.",
+                                        color = ParchmentMuted,
+                                        fontSize = 11.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Button(
+                                        onClick = { viewModel.autoFixDuplicates() },
+                                        colors = ButtonDefaults.buttonColors(containerColor = AmberAccent),
+                                        shape = RoundedCornerShape(6.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(36.dp)
+                                            .testTag("auto_fix_duplicates_btn")
+                                    ) {
+                                        Text("Auto-Fix All Duplicates", color = StudioObsidian, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    }
+                                }
                             }
                         }
                     }

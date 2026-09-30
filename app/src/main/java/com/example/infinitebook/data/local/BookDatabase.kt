@@ -10,13 +10,15 @@ import androidx.room.RoomDatabase
         BookEntity::class,
         ChapterEntity::class,
         ContinuityRecordEntity::class,
-        IllustrationEntity::class
+        IllustrationEntity::class,
+        OutlineEntity::class
     ],
     version = 1,
     exportSchema = false
 )
 abstract class BookDatabase : RoomDatabase() {
     abstract fun bookDao(): BookDao
+    abstract fun outlineDao(): OutlineDao
 
     companion object {
         @Volatile

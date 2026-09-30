@@ -1,13 +1,20 @@
 package com.example.infinitebook.data.repository
 
 import com.example.infinitebook.data.local.BookDao
+import com.example.infinitebook.data.local.BookDataStore
 import com.example.infinitebook.data.local.BookEntity
 import com.example.infinitebook.data.local.ChapterEntity
 import com.example.infinitebook.data.local.ContinuityRecordEntity
 import com.example.infinitebook.data.local.IllustrationEntity
+import com.example.infinitebook.data.local.OutlineDao
+import com.example.infinitebook.data.local.OutlineEntity
 import kotlinx.coroutines.flow.Flow
 
-class BookRepository(private val bookDao: BookDao) {
+class BookRepository(
+    private val bookDao: BookDao,
+    private val outlineDao: OutlineDao,
+    private val dataStore: BookDataStore? = null
+) {
 
     fun getAllBooks(): Flow<List<BookEntity>> = bookDao.getAllBooks()
 
@@ -72,4 +79,36 @@ class BookRepository(private val bookDao: BookDao) {
 
     suspend fun deleteIllustration(illustration: IllustrationEntity) =
         bookDao.deleteIllustration(illustration)
+
+    // Master Outline
+    fun getOutline(bookId: Long): Flow<List<OutlineEntity>> =
+        outlineDao.getOutlineForBook(bookId)
+
+    suspend fun getOutlineDirect(bookId: Long): List<OutlineEntity> =
+        outlineDao.getOutlineForBookDirect(bookId)
+
+    suspend fun getOutlineSectionDirect(bookId: Long, chapterNumber: Int, sectionNumber: Int): OutlineEntity? =
+        outlineDao.getSectionDirect(bookId, chapterNumber, sectionNumber)
+
+    suspend fun saveOutline(items: List<OutlineEntity>) =
+        outlineDao.insertOutline(items)
+
+    suspend fun updateOutlineSection(item: OutlineEntity) =
+        outlineDao.updateSection(item)
+
+    suspend fun getSectionCount(bookId: Long): Int =
+        outlineDao.getSectionCount(bookId)
+
+    // Continuation State (DataStore)
+    suspend fun saveContinuationState(bookId: Long, chapter: Int, section: Int, registryJson: String) {
+        dataStore?.saveContinuationState(bookId, chapter, section, registryJson)
+    }
+
+    suspend fun getContinuationState(bookId: Long): Triple<Int, Int, String> {
+        return dataStore?.getContinuationState(bookId) ?: Triple(1, 0, "")
+    }
+
+    suspend fun clearContinuationState(bookId: Long) {
+        dataStore?.clearContinuationState(bookId)
+    }
 }

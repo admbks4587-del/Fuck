@@ -120,3 +120,35 @@ data class IllustrationEntity(
     val paragraphAnchor: Int = 0, // In which section/paragraph to embed in chapter
     val createdAt: Long = System.currentTimeMillis()
 )
+
+@Entity(
+    tableName = "master_outlines",
+    foreignKeys = [
+        ForeignKey(
+            entity = BookEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["bookId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index(value = ["bookId", "chapterNumber", "sectionNumber"], unique = true)]
+)
+data class OutlineEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val bookId: Long,
+    val chapterNumber: Int,
+    val chapterTitle: String,
+    val sectionNumber: Int,
+    val sectionTitle: String,
+    val sectionGoal: String,
+    val targetWords: Int = 450, // 400-500 words minimum per page/section
+    val estimatedPageNumber: Int = 1,
+    val alternativeAnglesJson: String = "",
+    val status: String = "PENDING", // PENDING, GENERATING, COMPLETED
+    val content: String = "",
+    val heading: String = "",
+    val example: String = "",
+    val createdAt: Long = System.currentTimeMillis()
+)
+
