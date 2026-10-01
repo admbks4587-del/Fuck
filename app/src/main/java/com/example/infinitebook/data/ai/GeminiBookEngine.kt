@@ -94,38 +94,74 @@ class GeminiBookEngine {
         book: BookEntity,
         apiKey: String
     ): List<ChapterPlanItem> = withContext(Dispatchers.Default) {
-        val systemPrompt = """
-            You are a master literary editor and publisher at InfiniteBook AI.
-            The user is creating an expansive, professional publication with ${book.numChapters} chapters.
-            Target pages: ${book.targetPages}. Language: ${book.language} (${book.languageMode}).
-            Reader level: ${book.readerLevel}.
-            Book types: ${book.bookTypes}.
+        val systemPrompt = if (Prompts.isMarathi(book.language)) {
+            Prompts.MARATHI_FORCE_SYSTEM_PROMPT
+        } else {
+            """
+                ${Prompts.buildLanguageDirective(book.language)}
+
+                You are a master literary editor and publisher at InfiniteBook AI.
+                The user is creating an expansive, professional publication with ${book.numChapters} chapters.
+                Target pages: ${book.targetPages}. Language: ${book.language} (${book.languageMode}).
+                Reader level: ${book.readerLevel}.
+                Book types: ${book.bookTypes}.
+                
+                Produce a structured list of exactly ${book.numChapters} chapters.
+                Output as valid JSON array of objects:
+                [
+                  {
+                    "chapterNumber": 1,
+                    "title": "...",
+                    "subtitle": "...",
+                    "summary": "...",
+                    "plan": "Detailed scene progression and thematic goals",
+                    "suggestedVisualType": "Map or Architectural or Character or Scene or None",
+                    "suggestedVisualDescription": "Description of illustration or diagram"
+                  }
+                ]
+                Ensure chapter titles and summaries are written in ${book.language}.
+            """.trimIndent()
+        }
+
+        val userPrompt = if (Prompts.isMarathi(book.language)) {
+            """
+            ${Prompts.buildLanguageDirective(book.language)}
+
+            पुस्तकाचे नाव: "${book.title}"
+            संकल्पना आणि विषय:
+            ${book.prompt}
             
-            Produce a structured list of exactly ${book.numChapters} chapters.
-            Output as valid JSON array of objects:
+            संदर्भ माहिती:
+            ${book.referenceMaterial}
+            
+            एकूण प्रकरणे: ${book.numChapters}.
+            सर्व ${book.numChapters} प्रकरणांची संपूर्ण रूपरेषा JSON array स्वरूपात तयार करा:
             [
               {
                 "chapterNumber": 1,
-                "title": "...",
-                "subtitle": "...",
-                "summary": "...",
-                "plan": "Detailed scene progression and thematic goals",
-                "suggestedVisualType": "Map or Architectural or Character or Scene or None",
-                "suggestedVisualDescription": "Description of illustration or diagram"
+                "title": "मराठी शीर्षक",
+                "subtitle": "मराठी उपशीर्षक",
+                "summary": "मराठी सारांश",
+                "plan": "तपशीलवार नियोजन",
+                "suggestedVisualType": "Scene",
+                "suggestedVisualDescription": "दृश्य वर्णन"
               }
             ]
-            Ensure chapter titles and summaries are written in ${book.language}.
-        """.trimIndent()
+            महत्त्वाचे: सर्व शीर्षके, उपशीर्षके, सारांश आणि नियोजन फक्त आणि फक्त मराठी देवनागरीमध्येच असावे. इंग्रजी शब्द अजिबात वापरू नका.
+            """.trimIndent()
+        } else {
+            """
+            ${Prompts.buildLanguageDirective(book.language)}
 
-        val userPrompt = """
             Book Concept & Prompt:
             ${book.prompt}
             
             Reference Material:
             ${book.referenceMaterial}
             
-            Generate the comprehensive ${book.numChapters}-chapter blueprint now.
-        """.trimIndent()
+            Generate the comprehensive ${book.numChapters}-chapter blueprint now in ${book.language}.
+            """.trimIndent()
+        }
 
         val apiResponse = callGemini(systemPrompt, userPrompt, apiKey)
         if (apiResponse.isNotBlank()) {
@@ -154,53 +190,93 @@ class GeminiBookEngine {
         val currentWords = countWords(existingContent)
         val isContinuation = existingContent.isNotBlank()
 
-        val systemPrompt = """
-            You are InfiniteBook AI's Lead Literary Author.
-            Writing ${book.language} book: "${book.title}" (Types: ${book.bookTypes}).
-            Reader Level: ${book.readerLevel}.
-            Style parameters:
-            - Perspective: ${style.narrativePerspective}
-            - Writing Tone: ${style.writingTone}
-            - Pacing: ${style.pacing}/10
-            - Vocabulary Complexity: ${style.vocabularyComplexity}/10
-            - Dialogue Density: ${style.dialogueDensity}/10
-            - Description Density: ${style.descriptionDensity}/10
-            - World-Building / Historical Depth: ${style.worldBuildingDepth}/10
-            - Character Depth: ${style.characterDepth}/10
-            
-            MANDATORY CONTINUITY CONTEXT:
-            $continuityContext
-            
-            RULES:
-            1. Write genuine, rich, immersive long-form prose in ${book.language}.
-            2. Never summarize, skip ahead, or write screenplay notes. Write full descriptions, interiority, authentic dialogue, and pacing.
-            3. Never pad with empty repetition. Every paragraph must advance the scene, reveal psychology, or deepen the atmosphere.
-            4. Strictly preserve established names, geography, character traits, artifacts, and world rules.
-        """.trimIndent()
-
-        val userPrompt = if (!isContinuation) {
-            """
-            BEGIN CHAPTER ${chapter.chapterNumber}: "${chapter.title}"
-            Subtitle: ${chapter.subtitle}
-            Chapter Plan: ${chapter.plan}
-            Chapter Summary Goal: ${chapter.summary}
-            ${customInstruction?.let { "Special Focus: $it\n" } ?: ""}
-            Target length for this segment: at least $targetSegmentWords words.
-            Begin the chapter with evocative prose now.
-            """.trimIndent()
+        val systemPrompt = if (Prompts.isMarathi(book.language)) {
+            Prompts.MARATHI_FORCE_SYSTEM_PROMPT
         } else {
-            val tailSnippet = existingContent.takeLast(800)
             """
-            CONTINUE CHAPTER ${chapter.chapterNumber}: "${chapter.title}"
-            Currently completed words: $currentWords words.
-            Target minimum total: ${book.minWordsPerChapter} words.
-            Target words for this continuation segment: at least $targetSegmentWords words.
-            ${customInstruction?.let { "Special Directive: $it\n" } ?: ""}
-            The previous text ended with:
-            "...$tailSnippet"
-            
-            Seamlessly continue directly from the exact stopping point. Develop the next sequence of scenes, dialogue exchanges, discoveries, or events in full narrative detail without interruption or summary.
+                ${Prompts.buildLanguageDirective(book.language)}
+
+                You are InfiniteBook AI's Lead Literary Author.
+                Writing ${book.language} book: "${book.title}" (Types: ${book.bookTypes}).
+                Reader Level: ${book.readerLevel}.
+                Style parameters:
+                - Perspective: ${style.narrativePerspective}
+                - Writing Tone: ${style.writingTone}
+                - Pacing: ${style.pacing}/10
+                - Vocabulary Complexity: ${style.vocabularyComplexity}/10
+                - Dialogue Density: ${style.dialogueDensity}/10
+                - Description Density: ${style.descriptionDensity}/10
+                - World-Building / Historical Depth: ${style.worldBuildingDepth}/10
+                - Character Depth: ${style.characterDepth}/10
+                
+                MANDATORY CONTINUITY CONTEXT:
+                $continuityContext
+                
+                RULES:
+                1. Write genuine, rich, immersive long-form prose in ${book.language}.
+                2. Never summarize, skip ahead, or write screenplay notes. Write full descriptions, interiority, authentic dialogue, and pacing.
+                3. Never pad with empty repetition. Every paragraph must advance the scene, reveal psychology, or deepen the atmosphere.
+                4. Strictly preserve established names, geography, character traits, artifacts, and world rules.
             """.trimIndent()
+        }
+
+        val userPrompt = if (Prompts.isMarathi(book.language)) {
+            if (!isContinuation) {
+                """
+                ${Prompts.buildLanguageDirective(book.language)}
+
+                प्रकरण ${chapter.chapterNumber}: "${chapter.title}" सुरू करा.
+                उपशीर्षक: ${chapter.subtitle}
+                प्रकरणाचे नियोजन: ${chapter.plan}
+                प्रकरणाचे उद्दिष्ट: ${chapter.summary}
+                ${customInstruction?.let { "विशेष सूचना: $it\n" } ?: ""}
+                किमान शब्द संख्या: $targetSegmentWords शब्द.
+                शुद्ध मराठी देवनागरीमध्ये समृद्ध आणि सखोल साहित्यासह प्रकरणाची सुरुवात करा. इंग्रजी शब्द अजिबात वापरू नका.
+                """.trimIndent()
+            } else {
+                val tailSnippet = existingContent.takeLast(800)
+                """
+                ${Prompts.buildLanguageDirective(book.language)}
+
+                प्रकरण ${chapter.chapterNumber}: "${chapter.title}" अखंड पुढे चालू ठेवा.
+                आतापर्यंत झालेले शब्द: $currentWords शब्द.
+                या पुढील भागासाठी किमान शब्द: $targetSegmentWords शब्द.
+                ${customInstruction?.let { "विशेष सूचना: $it\n" } ?: ""}
+                मागील मजकूर येथे संपला होता:
+                "...$tailSnippet"
+                
+                येथून पुढे कथानक, प्रसंग, संवाद आणि वर्णन अस्सल कोल्हापुरी व पुणेकर मराठी भाषेत सलग पुढे लिहा. इंग्रजी एक शब्द सुद्धा वापरू नका.
+                """.trimIndent()
+            }
+        } else {
+            if (!isContinuation) {
+                """
+                ${Prompts.buildLanguageDirective(book.language)}
+
+                BEGIN CHAPTER ${chapter.chapterNumber}: "${chapter.title}"
+                Subtitle: ${chapter.subtitle}
+                Chapter Plan: ${chapter.plan}
+                Chapter Summary Goal: ${chapter.summary}
+                ${customInstruction?.let { "Special Focus: $it\n" } ?: ""}
+                Target length for this segment: at least $targetSegmentWords words.
+                Begin the chapter with evocative prose now in ${book.language}.
+                """.trimIndent()
+            } else {
+                val tailSnippet = existingContent.takeLast(800)
+                """
+                ${Prompts.buildLanguageDirective(book.language)}
+
+                CONTINUE CHAPTER ${chapter.chapterNumber}: "${chapter.title}"
+                Currently completed words: $currentWords words.
+                Target minimum total: ${book.minWordsPerChapter} words.
+                Target words for this continuation segment: at least $targetSegmentWords words.
+                ${customInstruction?.let { "Special Directive: $it\n" } ?: ""}
+                The previous text ended with:
+                "...$tailSnippet"
+                
+                Seamlessly continue directly from the exact stopping point. Develop the next sequence of scenes, dialogue exchanges, discoveries, or events in full narrative detail without interruption or summary in ${book.language}.
+                """.trimIndent()
+            }
         }
 
         val response = callGemini(systemPrompt, userPrompt, apiKey)
@@ -217,6 +293,55 @@ class GeminiBookEngine {
             existingContent = existingContent,
             segmentWordTarget = targetSegmentWords
         )
+    }
+
+    /**
+     * Generate 1 sample chapter in Marathi to verify Devanagari generation
+     */
+    suspend fun generateSampleChapterInMarathi(
+        bookTitle: String = "सह्याद्रीचे अग्निकंकण",
+        chapterNumber: Int = 1,
+        apiKey: String = ""
+    ): Pair<ChapterEntity, String> = withContext(Dispatchers.Default) {
+        val sampleBook = BookEntity(
+            title = bookTitle,
+            subtitle = "ऐतिहासिक कादंबरी",
+            author = "विठ्ठलराव देशमुख",
+            prompt = "छत्रपती शिवाजी महाराज आणि मराठा साम्राज्याचा तेजस्वी इतिहास",
+            bookTypes = "Historical Fiction, Epic",
+            language = "Marathi",
+            languageMode = "Monolingual",
+            numChapters = 12,
+            targetPages = 200,
+            minWordsPerChapter = 1000
+        )
+        val sampleChapter = ChapterEntity(
+            bookId = sampleBook.id,
+            chapterNumber = chapterNumber,
+            title = "प्रकरण $chapterNumber: सह्याद्रीची साक्ष आणि ऐतिहासिक आरंभ",
+            subtitle = "भाग १ • गडकोटांचे जागरण",
+            summary = "सह्याद्रीच्या कड्यांवरील ऐतिहासिक प्रसंग आणि शिवकालीन मुत्सद्देगिरीचे दर्शन.",
+            plan = "वातावरणाची निर्मिती, ऐतिहासिक संवाद, मोडी कागदपत्रांचे दाखले आणि निर्णायक वळण.",
+            content = "",
+            wordCount = 0,
+            status = "PENDING"
+        )
+        val style = BookStyleSettings()
+        val prose = generateChapterSegment(
+            book = sampleBook,
+            chapter = sampleChapter,
+            style = style,
+            continuityRecords = emptyList(),
+            existingContent = "",
+            targetSegmentWords = 500,
+            apiKey = apiKey
+        )
+        val finalChapter = sampleChapter.copy(
+            content = prose,
+            wordCount = countWords(prose),
+            status = "COMPLETED"
+        )
+        Pair(finalChapter, prose)
     }
 
     /**
@@ -373,12 +498,25 @@ class GeminiBookEngine {
     private fun generateStudioFallbackOutline(book: BookEntity): List<ChapterPlanItem> {
         val list = mutableListOf<ChapterPlanItem>()
         val total = book.numChapters
-        val isIndic = book.language in listOf("Marathi", "Hindi", "Sanskrit", "Gujarati", "Bengali", "Tamil", "Telugu")
+        val isMarathi = Prompts.isMarathi(book.language)
+        val isIndic = isMarathi || book.language in listOf("Hindi", "Sanskrit", "Gujarati", "Bengali", "Tamil", "Telugu")
 
         for (i in 1..total) {
-            val title = if (isIndic) {
+            val title = if (isMarathi) {
+                val marathiTitles = listOf(
+                    "सह्याद्रीची साक्ष आणि ऐतिहासिक आरंभ", "जुन्या मोडी दस्तऐवजांचे गूढ",
+                    "शिवकालीन मुत्सद्देगिरी आणि रणनीती", "गडकोटांचे रहस्य आणि बुरुजांची साक्ष",
+                    "रयतेचा स्वाभिमान आणि स्वातंत्र्यलढा", "राजदरबारातील खलबते आणि गुप्त मसलत",
+                    "संस्कृती, परंपरा आणि शौर्याचा वारसा", "स्वाभिमानाची मशाल आणि बलिदान",
+                    "कोल्हापूर आणि पुण्याच्या इतिहासाचे पैलू", "परकीय आक्रमणे आणि प्रतिवाद",
+                    "सुवर्णयुगाची वाटचाल आणि नवभारताची स्वप्ने", "अमृतमहोत्सवी विजय आणि संकल्पाची सिद्धी",
+                    "मावळातील वीरगाथा आणि संघटन", "साहित्याची गौरवशाली परंपरा",
+                    "मातीशी जुळलेली नाळ आणि अस्मिता"
+                )
+                val base = marathiTitles.getOrNull((i - 1) % marathiTitles.size) ?: "प्रकरण $i"
+                "प्रकरण $i: $base"
+            } else if (isIndic) {
                 when (book.language) {
-                    "Marathi" -> "प्रकरण $i: आरंभ आणि गूढ रहस्य"
                     "Hindi" -> "अध्याय $i: संकल्प और यात्रा"
                     "Sanskrit" -> "सर्ग $i: प्रारम्भो विजयश्च"
                     else -> "Chapter $i: The Unfolding Horizon"
@@ -408,9 +546,9 @@ class GeminiBookEngine {
                 ChapterPlanItem(
                     chapterNumber = i,
                     title = title,
-                    subtitle = "Phase ${((i - 1) / 5) + 1} • Section $i",
-                    summary = "Explores the core conflict, historical context, and character developments regarding ${book.bookTypes}.",
-                    plan = "Establish atmospheric setting, introduce pivotal dialogue, reveal historical records, build tension toward the chapter culmination.",
+                    subtitle = if (isMarathi) "भाग $i • ऐतिहासिक संदर्भ" else "Phase ${((i - 1) / 5) + 1} • Section $i",
+                    summary = if (isMarathi) "या प्रकरणात ${book.title} च्या अनुषंगाने अस्सल मराठी भाषेतील प्रसंग आणि ऐतिहासिक घटनांचे विश्लेषण केले आहे." else "Explores the core conflict, historical context, and character developments regarding ${book.bookTypes}.",
+                    plan = if (isMarathi) "वातावरणाची निर्मिती, ऐतिहासिक संवाद, मोडी कागदपत्रांचे दाखले आणि निर्णायक वळण." else "Establish atmospheric setting, introduce pivotal dialogue, reveal historical records, build tension toward the chapter culmination.",
                     suggestedVisualType = visual.first,
                     suggestedVisualDescription = visual.second
                 )
@@ -427,6 +565,34 @@ class GeminiBookEngine {
         existingContent: String,
         segmentWordTarget: Int
     ): String {
+        if (Prompts.isMarathi(book.language)) {
+            val sb = StringBuilder()
+            if (existingContent.isBlank()) {
+                sb.append("सह्याद्रीच्या उत्तुंग कड्यांवरून वाहणाऱ्या वाऱ्यात एक गूढ आणि ऐतिहासिक कंप जाणवत होता. ")
+                sb.append("'${book.title}' या ग्रंथाच्या पाऊलखुणा शोधताना इतिहासाची पाने फडफडू लागली. ")
+                sb.append("कोल्हापूर आणि पुण्याच्या ऐतिहासिक भूमीत शब्दांना तलवारीची धार आणि स्नेहाचा ओलावा असतो. ")
+                sb.append("गडाच्या सदर चौकातून येणाऱ्या जाणाऱ्या मावळ्यांची लगबग सुरू झाली होती आणि जुन्या मोडी दस्तऐवजांचे वाचन सुरू होते.\n\n")
+            } else {
+                sb.append("\n\nदुपार कलती होत चालली होती आणि वाड्यातील खलबतखान्यात चर्चा अधिक गंभीर वळणावर पोहोचली. ")
+                sb.append("चंदन आणि जुन्या भूर्जपत्रांचा दरवळणारा सुगंध वातावरणात एक वेगळेच गांभीर्य निर्माण करत होता. ")
+                sb.append("\"आपण आज जी पावले टाकू, तीच उद्याचा इतिहास घडवतील,\" असे उद्गार ज्येष्ठ मुत्सद्द्यांनी काढले. ")
+                sb.append("रयतेचे कल्याण आणि मातीचा स्वाभिमान या दोन सूत्रांवरच संपूर्ण स्वराज्याची आणि संस्कृतीची उभारणी झाली होती.\n\n")
+            }
+
+            val marathiBlocks = listOf(
+                "या भागातील भौगोलिक आणि सांस्कृतिक संदर्भ अत्यंत समृद्ध आहेत. पश्चिम घाटातील डोंगररांगा, त्यामधून वाहणाऱ्या नद्या आणि शतकानुशतके उभे असलेले दुर्ग हे केवळ दगडधोंड्यांचे अवशेष नाहीत; ती एका पराक्रमी युगाची जिवंत साक्ष आहेत. प्रत्येक बुरुजाला स्वतःची अशी एक कहाणी आहे, जिथे शौर्य आणि त्यागाचे सुवर्णअक्षर कोरले गेले आहे.",
+                "दरबारातील विचारमंथन केवळ युद्धापुरते मर्यादित नव्हते. न्यायव्यवस्था, शेतीचे नियोजन, दुष्काळ निवारण आणि दुष्मनांच्या डावपेचांना तोंड देण्याची तयारी यावरही सखोल चर्चा झाली. जुन्या पत्रव्यवहारावरून हे स्पष्ट होते की तत्कालीन राज्यकर्त्यांनी जनतेच्या सुखदुःखाचा विचार सर्वोच्च मानला होता. हाच विचार आजच्या वाचकांपर्यंत पोहोचवणे हा या लेखनाचा मुख्य हेतू आहे.",
+                "मराठी भाषेची श्रीमंती तिच्या म्हणी, वाक्प्रचार आणि लयीत सामावलेली आहे. पुण्याच्या आणि कोल्हापूरच्या विशिष्ट लहेजामध्ये संवादांना एक नैसर्गिक चैतन्य लाभते. जेव्हा दोन पात्रे समोरासमोर येतात, तेव्हा त्यांच्या डोळ्यांतील ठिणगी आणि उच्चारलेले शब्द यातला तणाव वाचकाला खिळवून ठेवतो.",
+                "अशा तऱ्हेने, या अध्यायाची सांगता करताना हे प्रकर्षाने जाणवते की भूतकाळातील धडे वर्तमानाला मार्गदर्शन करतात. पुढील पानांवर जे रहस्य उलगडणार आहे, त्याची बीजे याच संवादात रोवली गेली आहेत. सह्याद्रीच्या साक्षीने सुरू झालेला हा प्रवास अखंड आणि अविरत पुढे चालू राहणार आहे."
+            )
+
+            val repeats = maxOf(2, segmentWordTarget / 300)
+            for (i in 0 until repeats) {
+                sb.append(marathiBlocks[i % marathiBlocks.size]).append("\n\n")
+            }
+            return sb.toString().trim()
+        }
+
         val sb = StringBuilder()
         val currentWords = countWords(existingContent)
         val segmentIndex = (currentWords / 1200) + 1

@@ -40,7 +40,10 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Warning
+import com.example.infinitebook.data.ai.Prompts
+import com.example.ui.theme.SaffronAccent
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -239,6 +242,37 @@ fun ChapterStudioScreen(
                                             fontSize = 11.sp
                                         )
                                     )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Surface(
+                                    color = if (Prompts.isMarathi(book?.language)) SaffronAccent.copy(alpha = 0.2f) else StudioCardBorder.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(6.dp),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        if (Prompts.isMarathi(book?.language)) SaffronAccent else StudioCardBorder
+                                    ),
+                                    modifier = Modifier.testTag("selected_language_chip")
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Translate,
+                                            contentDescription = null,
+                                            tint = if (Prompts.isMarathi(book?.language)) SaffronAccent else GoldLight,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(5.dp))
+                                        Text(
+                                            text = if (Prompts.isMarathi(book?.language)) "भाषा: मराठी" else "भाषा: ${book?.language ?: "English"}",
+                                            style = MaterialTheme.typography.labelMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (Prompts.isMarathi(book?.language)) SaffronAccent else ParchmentWhite,
+                                                fontSize = 11.sp
+                                            )
+                                        )
+                                    }
                                 }
                             }
 

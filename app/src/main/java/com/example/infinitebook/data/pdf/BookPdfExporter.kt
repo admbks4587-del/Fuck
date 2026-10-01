@@ -24,11 +24,48 @@ import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.example.infinitebook.data.ai.Prompts
 
 class BookPdfExporter(private val context: Context) {
 
     var lastChapterPageMap: Map<Int, Int> = emptyMap()
         private set
+
+    // Lazy load Noto Sans Devanagari font from assets for Marathi / Indic text rendering
+    private val devanagariTypeface: Typeface by lazy {
+        try {
+            Typeface.createFromAsset(context.assets, "fonts/noto_sans_devanagari.ttf")
+        } catch (e: Exception) {
+            try {
+                androidx.core.content.res.ResourcesCompat.getFont(context, com.example.R.font.noto_sans_devanagari)
+                    ?: Typeface.create("sans-serif", Typeface.NORMAL)
+            } catch (e2: Exception) {
+                Typeface.create("sans-serif", Typeface.NORMAL)
+            }
+        }
+    }
+
+    private val devanagariBoldTypeface: Typeface by lazy {
+        try {
+            Typeface.create(devanagariTypeface, Typeface.BOLD)
+        } catch (e: Exception) {
+            Typeface.create("sans-serif", Typeface.BOLD)
+        }
+    }
+
+    private fun getTypeface(book: BookEntity, isBold: Boolean = false, isItalic: Boolean = false): Typeface {
+        return if (Prompts.isMarathi(book.language) || book.language in listOf("Hindi", "Sanskrit", "Gujarati")) {
+            if (isBold) devanagariBoldTypeface else devanagariTypeface
+        } else {
+            val style = when {
+                isBold && isItalic -> Typeface.BOLD_ITALIC
+                isBold -> Typeface.BOLD
+                isItalic -> Typeface.ITALIC
+                else -> Typeface.NORMAL
+            }
+            Typeface.create(Typeface.SERIF, style)
+        }
+    }
 
     // Standard A4 dimensions in typographic points (72 points per inch)
     // 8.27 in x 11.69 in = ~595 x 842 points
@@ -245,7 +282,7 @@ class BookPdfExporter(private val context: Context) {
         val titlePaint = Paint().apply {
             color = Color.parseColor("#F5F2EB")
             textSize = 28f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+            typeface = getTypeface(book, isBold = true)
             textAlign = Paint.Align.CENTER
             isAntiAlias = true
         }
@@ -263,7 +300,7 @@ class BookPdfExporter(private val context: Context) {
             val subPaint = Paint().apply {
                 color = Color.parseColor("#D4AF37")
                 textSize = 13f
-                typeface = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
+                typeface = getTypeface(book, isBold = false, isItalic = true)
                 textAlign = Paint.Align.CENTER
                 isAntiAlias = true
             }
@@ -288,44 +325,47 @@ class BookPdfExporter(private val context: Context) {
         val langPaint = Paint().apply {
             color = Color.parseColor("#667085")
             textSize = 9f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+            typeface = getTypeface(book, isBold = false)
             textAlign = Paint.Align.CENTER
             isAntiAlias = true
             letterSpacing = 0.1f
         }
-        canvas.drawText("LANGUAGE: ${book.language.uppercase()}  |  VOL. I  |  COMPLETE EDITION", cx, 660f, langPaint)
+        val langLabel = if (Prompts.isMarathi(book.language)) "भाषा: मराठी देवनागरी  |  खंड १  |  संपूर्ण आवृत्ती" else "LANGUAGE: ${book.language.uppercase()}  |  VOL. I  |  COMPLETE EDITION"
+        canvas.drawText(langLabel, cx, 660f, langPaint)
 
         // Author Name
         val authorLabelPaint = Paint().apply {
             color = Color.parseColor("#98A2B3")
             textSize = 9f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+            typeface = getTypeface(book, isBold = false)
             textAlign = Paint.Align.CENTER
             isAntiAlias = true
             letterSpacing = 0.2f
         }
-        canvas.drawText("WRITTEN & COMPILED BY", cx, 715f, authorLabelPaint)
+        val authorPrefix = if (Prompts.isMarathi(book.language)) "लेखक व संकलक" else "WRITTEN & COMPILED BY"
+        canvas.drawText(authorPrefix, cx, 715f, authorLabelPaint)
 
         val authorPaint = Paint().apply {
             color = Color.parseColor("#F5F2EB")
             textSize = 18f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+            typeface = getTypeface(book, isBold = true)
             textAlign = Paint.Align.CENTER
             isAntiAlias = true
-            letterSpacing = 0.15f
+            letterSpacing = if (Prompts.isMarathi(book.language)) 0.05f else 0.15f
         }
-        canvas.drawText(book.author.uppercase(), cx, 740f, authorPaint)
+        canvas.drawText(book.author, cx, 740f, authorPaint)
 
         // Bottom Press Note
         val pressPaint = Paint().apply {
             color = Color.parseColor("#5A6578")
             textSize = 8f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL)
+            typeface = getTypeface(book, isBold = false)
             textAlign = Paint.Align.CENTER
             isAntiAlias = true
             letterSpacing = 0.1f
         }
-        canvas.drawText("PUBLISHED BY INFINITEBOOK AI PRESS  •  A4 PRESERVATION FOLIO", cx, 790f, pressPaint)
+        val pressLabel = if (Prompts.isMarathi(book.language)) "इन्फिनाईटबुक एआय प्रेस द्वारे प्रकाशित  •  A4 ग्रंथ आवृत्ती" else "PUBLISHED BY INFINITEBOOK AI PRESS  •  A4 PRESERVATION FOLIO"
+        canvas.drawText(pressLabel, cx, 790f, pressPaint)
     }
 
     private fun renderTitlePage(canvas: Canvas, book: BookEntity) {
@@ -334,7 +374,7 @@ class BookPdfExporter(private val context: Context) {
         val titlePaint = Paint().apply {
             color = Color.parseColor("#101828")
             textSize = 26f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+            typeface = getTypeface(book, isBold = true)
             textAlign = Paint.Align.CENTER
             isAntiAlias = true
         }
@@ -351,7 +391,7 @@ class BookPdfExporter(private val context: Context) {
             val subPaint = Paint().apply {
                 color = Color.parseColor("#475467")
                 textSize = 13f
-                typeface = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
+                typeface = getTypeface(book, isBold = false, isItalic = true)
                 textAlign = Paint.Align.CENTER
                 isAntiAlias = true
             }
@@ -371,23 +411,25 @@ class BookPdfExporter(private val context: Context) {
         val authorPaint = Paint().apply {
             color = Color.parseColor("#1D2939")
             textSize = 16f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL)
+            typeface = getTypeface(book, isBold = false)
             textAlign = Paint.Align.CENTER
             isAntiAlias = true
         }
-        canvas.drawText("By ${book.author}", cx, cy + 60, authorPaint)
+        val byText = if (Prompts.isMarathi(book.language)) "लेखक: ${book.author}" else "By ${book.author}"
+        canvas.drawText(byText, cx, cy + 60, authorPaint)
 
         // Metadata specs at bottom
         val metaPaint = Paint().apply {
             color = Color.parseColor("#475467")
             textSize = 9.5f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+            typeface = getTypeface(book, isBold = false)
             textAlign = Paint.Align.CENTER
             isAntiAlias = true
         }
         canvas.drawText("Original Concept & Prompt Source Edition", cx, 660f, metaPaint)
         canvas.drawText("Reader Depth Classification: ${book.readerLevel}", cx, 680f, metaPaint)
-        canvas.drawText("Primary Language: ${book.language} (${book.languageMode})", cx, 700f, metaPaint)
+        val langSpec = if (Prompts.isMarathi(book.language)) "भाषा: मराठी (मराठी देवनागरी)" else "Primary Language: ${book.language} (${book.languageMode})"
+        canvas.drawText(langSpec, cx, 700f, metaPaint)
 
         val imprintPaint = Paint().apply {
             color = Color.parseColor("#1D2939")
@@ -450,18 +492,19 @@ class BookPdfExporter(private val context: Context) {
             val dedLabelPaint = Paint().apply {
                 color = Color.parseColor("#98A2B3")
                 textSize = 10f
-                typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL)
+                typeface = getTypeface(book, isBold = false)
                 textAlign = Paint.Align.CENTER
                 isAntiAlias = true
                 letterSpacing = 0.2f
             }
-            canvas.drawText("DEDICATION", cx, y, dedLabelPaint)
+            val dedLabel = if (Prompts.isMarathi(book.language)) "समर्पण" else "DEDICATION"
+            canvas.drawText(dedLabel, cx, y, dedLabelPaint)
             y += 30f
 
             val dedTextPaint = Paint().apply {
                 color = Color.parseColor("#1D2939")
                 textSize = 12f
-                typeface = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
+                typeface = getTypeface(book, isBold = false, isItalic = true)
                 textAlign = Paint.Align.CENTER
                 isAntiAlias = true
             }
@@ -477,7 +520,7 @@ class BookPdfExporter(private val context: Context) {
             val epigraphPaint = Paint().apply {
                 color = Color.parseColor("#344054")
                 textSize = 11f
-                typeface = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
+                typeface = getTypeface(book, isBold = false, isItalic = true)
                 textAlign = Paint.Align.CENTER
                 isAntiAlias = true
             }
@@ -499,8 +542,9 @@ class BookPdfExporter(private val context: Context) {
         totalTocPages: Int,
         illustrations: List<IllustrationEntity>
     ) {
-        val headerTitle = if (book.language in listOf("Marathi", "Hindi", "Sanskrit")) {
-            "अनुक्रमणिका (Table of Contents)"
+        val isMarathi = Prompts.isMarathi(book.language)
+        val headerTitle = if (isMarathi || book.language in listOf("Hindi", "Sanskrit")) {
+            "अनुक्रमणिका"
         } else {
             "TABLE OF CONTENTS"
         }
@@ -508,10 +552,10 @@ class BookPdfExporter(private val context: Context) {
         val titlePaint = Paint().apply {
             color = Color.parseColor("#101828")
             textSize = 18f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+            typeface = getTypeface(book, isBold = true)
             textAlign = Paint.Align.CENTER
             isAntiAlias = true
-            letterSpacing = 0.1f
+            letterSpacing = if (isMarathi) 0.02f else 0.1f
         }
         canvas.drawText(headerTitle, (pageWidth / 2).toFloat(), 85f, titlePaint)
 
@@ -525,7 +569,7 @@ class BookPdfExporter(private val context: Context) {
         val itemPaint = Paint().apply {
             color = Color.parseColor("#1D2939")
             textSize = 10f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL)
+            typeface = getTypeface(book, isBold = false)
             isAntiAlias = true
         }
 
@@ -547,7 +591,7 @@ class BookPdfExporter(private val context: Context) {
         val pageChapters = chapters.drop(startIdx).take(24)
 
         for (ch in pageChapters) {
-            val titleStr = "Chapter ${ch.chapterNumber}: ${ch.title}".take(48)
+            val titleStr = if (isMarathi) "प्रकरण ${ch.chapterNumber}: ${ch.title}".take(48) else "Chapter ${ch.chapterNumber}: ${ch.title}".take(48)
             val pNum = chapterPageMap[ch.chapterNumber] ?: (currentPage + 1)
 
             canvas.drawText(titleStr, marginHorizontal.toFloat(), y, itemPaint)
@@ -566,16 +610,17 @@ class BookPdfExporter(private val context: Context) {
             val illTitlePaint = Paint().apply {
                 color = Color.parseColor("#101828")
                 textSize = 12f
-                typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+                typeface = getTypeface(book, isBold = true)
                 isAntiAlias = true
             }
-            canvas.drawText("LIST OF ILLUSTRATIONS & CARTOGRAPHY", marginHorizontal.toFloat(), y, illTitlePaint)
+            val illHeader = if (isMarathi) "चित्रे व नकाशे सूची" else "LIST OF ILLUSTRATIONS & CARTOGRAPHY"
+            canvas.drawText(illHeader, marginHorizontal.toFloat(), y, illTitlePaint)
             y += 20f
 
             val illItemPaint = Paint().apply {
                 color = Color.parseColor("#475467")
                 textSize = 9f
-                typeface = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
+                typeface = getTypeface(book, isBold = false, isItalic = true)
                 isAntiAlias = true
             }
 
@@ -602,18 +647,20 @@ class BookPdfExporter(private val context: Context) {
         chapter: ChapterEntity,
         illustrations: List<IllustrationEntity>
     ): Int {
+        val isMarathi = Prompts.isMarathi(book.language)
         var pageNum = startPageNum
         val textPaint = Paint().apply {
             color = Color.parseColor("#1F2937")
             textSize = 10f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL)
+            typeface = getTypeface(book, isBold = false)
             isAntiAlias = true
         }
 
         val paragraphs = if (chapter.content.isNotBlank()) {
             chapter.content.split("\n\n").filter { it.isNotBlank() }
         } else {
-            listOf("Manuscript for Chapter ${chapter.chapterNumber} is currently pending generation in the InfiniteBook AI studio.")
+            val pendingMsg = if (isMarathi) "प्रकरण ${chapter.chapterNumber} चे साहित्य स्टुडिओमध्ये निर्मिती प्रक्रियेत आहे." else "Manuscript for Chapter ${chapter.chapterNumber} is currently pending generation in the InfiniteBook AI studio."
+            listOf(pendingMsg)
         }
 
         var pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNum).create()
@@ -627,17 +674,18 @@ class BookPdfExporter(private val context: Context) {
         val chapterNumPaint = Paint().apply {
             color = Color.parseColor("#D4AF37")
             textSize = 11f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+            typeface = getTypeface(book, isBold = true)
             textAlign = Paint.Align.CENTER
-            letterSpacing = 0.2f
+            letterSpacing = if (isMarathi) 0.05f else 0.2f
             isAntiAlias = true
         }
-        canvas.drawText("CHAPTER ${chapter.chapterNumber}".uppercase(), (pageWidth / 2).toFloat(), 95f, chapterNumPaint)
+        val chNumLabel = if (isMarathi) "प्रकरण ${chapter.chapterNumber}" else "CHAPTER ${chapter.chapterNumber}".uppercase()
+        canvas.drawText(chNumLabel, (pageWidth / 2).toFloat(), 95f, chapterNumPaint)
 
         val chTitlePaint = Paint().apply {
             color = Color.parseColor("#111827")
             textSize = 18f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+            typeface = getTypeface(book, isBold = true)
             textAlign = Paint.Align.CENTER
             isAntiAlias = true
         }
@@ -651,7 +699,7 @@ class BookPdfExporter(private val context: Context) {
             val subPaint = Paint().apply {
                 color = Color.parseColor("#6B7280")
                 textSize = 10f
-                typeface = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
+                typeface = getTypeface(book, isBold = false, isItalic = true)
                 textAlign = Paint.Align.CENTER
                 isAntiAlias = true
             }
@@ -824,27 +872,29 @@ class BookPdfExporter(private val context: Context) {
         records: List<ContinuityRecordEntity>,
         pageNumber: Int
     ) {
+        val isMarathi = Prompts.isMarathi(book.language)
         val titlePaint = Paint().apply {
             color = Color.parseColor("#111827")
             textSize = 16f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+            typeface = getTypeface(book, isBold = true)
             textAlign = Paint.Align.CENTER
             isAntiAlias = true
         }
-        canvas.drawText("GLOSSARY & CONTINUITY CHRONICLE", (pageWidth / 2).toFloat(), 85f, titlePaint)
+        val headingText = if (isMarathi) "शब्दकोश व संदर्भ सूची" else "GLOSSARY & CONTINUITY CHRONICLE"
+        canvas.drawText(headingText, (pageWidth / 2).toFloat(), 85f, titlePaint)
 
         var y = 125f
         val termPaint = Paint().apply {
             color = Color.parseColor("#1F2937")
             textSize = 9.5f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+            typeface = getTypeface(book, isBold = true)
             isAntiAlias = true
         }
 
         val descPaint = Paint().apply {
             color = Color.parseColor("#4B5563")
             textSize = 9f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL)
+            typeface = getTypeface(book, isBold = false)
             isAntiAlias = true
         }
 
@@ -870,28 +920,32 @@ class BookPdfExporter(private val context: Context) {
         backMatter: BackMatterConfig,
         pageNumber: Int
     ) {
+        val isMarathi = Prompts.isMarathi(book.language)
         val cx = (pageWidth / 2).toFloat()
         var y = 140f
 
         val headingPaint = Paint().apply {
             color = Color.parseColor("#111827")
             textSize = 16f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+            typeface = getTypeface(book, isBold = true)
             textAlign = Paint.Align.CENTER
             isAntiAlias = true
         }
-        canvas.drawText("ABOUT THE AUTHOR", cx, y, headingPaint)
+        val aboutTitle = if (isMarathi) "लेखक परिचय" else "ABOUT THE AUTHOR"
+        canvas.drawText(aboutTitle, cx, y, headingPaint)
         y += 35f
 
         val bodyPaint = Paint().apply {
             color = Color.parseColor("#374151")
             textSize = 10f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL)
+            typeface = getTypeface(book, isBold = false)
             isAntiAlias = true
         }
 
         val authorBio = if (backMatter.aboutAuthorText.isNotBlank()) {
             backMatter.aboutAuthorText
+        } else if (isMarathi) {
+            "${book.author} हे एक ज्येष्ठ लेखक आणि इतिहास संशोधक आहेत. त्यांनी ${book.bookTypes} या विषयावर सखोल संशोधन करून हा ऐतिहासिक व साहित्यिक ग्रंथ साकारला आहे. इन्फिनाईटबुक एआय स्टुडिओच्या सहकार्याने या ग्रंथाची निर्मिती झाली आहे."
         } else {
             "${book.author} is a dedicated chronicler and author whose work spans ${book.bookTypes}. Writing with meticulous attention to atmosphere, cultural resonance, and depth, this volume represents the pinnacle of generative literary craft produced through InfiniteBook AI."
         }
@@ -1089,7 +1143,7 @@ class BookPdfExporter(private val context: Context) {
         val headPaint = Paint().apply {
             color = Color.parseColor("#9CA3AF")
             textSize = 8.5f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL)
+            typeface = getTypeface(book, isBold = false)
             isAntiAlias = true
         }
         val headerText = "${book.title}  •  ${chapterTitle}".take(60)

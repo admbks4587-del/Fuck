@@ -131,20 +131,40 @@ class BookGenerator(
         val outlineItems = mutableListOf<OutlineEntity>()
         var globalPageNumber = 1
 
-        val systemPrompt = """
-            You are InfiniteBook AI's Master Outline Architect.
-            Create a detailed publication outline for "${book.title}" (${book.bookTypes}).
-            Total target pages: $targetPages. Total chapters: $chapterCount.
-            Language: ${book.language}.
-            Output a JSON array of chapter outlines with sections.
-            Each section represents exactly ONE full page of substantive narrative / knowledge (400-500 words).
-        """.trimIndent()
+        val systemPrompt = if (Prompts.isMarathi(book.language)) {
+            Prompts.MARATHI_FORCE_SYSTEM_PROMPT
+        } else {
+            """
+                ${Prompts.buildLanguageDirective(book.language)}
 
-        val userPrompt = """
+                You are InfiniteBook AI's Master Outline Architect.
+                Create a detailed publication outline for "${book.title}" (${book.bookTypes}).
+                Total target pages: $targetPages. Total chapters: $chapterCount.
+                Language: ${book.language}.
+                Output a JSON array of chapter outlines with sections.
+                Each section represents exactly ONE full page of substantive narrative / knowledge (400-500 words).
+            """.trimIndent()
+        }
+
+        val userPrompt = if (Prompts.isMarathi(book.language)) {
+            """
+            ${Prompts.buildLanguageDirective(book.language)}
+
+            पुस्तकाचे नाव: "${book.title}"
+            संकल्पना: ${book.prompt}
+            संदर्भ: ${book.referenceMaterial}
+            एकूण प्रकरणे: $chapterCount.
+            सर्व $chapterCount प्रकरणांची संपूर्ण रूपरेषा JSON array स्वरूपात तयार करा. प्रत्येक प्रकरणाचे शीर्षक व विभाग शुद्ध मराठी देवनागरीमध्ये असावे.
+            """.trimIndent()
+        } else {
+            """
+            ${Prompts.buildLanguageDirective(book.language)}
+
             Book Concept: ${book.prompt}
             Reference Material: ${book.referenceMaterial}
-            Generate the chapter progression and major thematic beats.
-        """.trimIndent()
+            Generate the chapter progression and major thematic beats in ${book.language}.
+            """.trimIndent()
+        }
 
         val aiOutlineResponse = if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
             callGemini(systemPrompt, userPrompt, apiKey, 0.70)
@@ -236,25 +256,45 @@ class BookGenerator(
 
         // a) Build prompt with covered topics
         val coveredSummary = registry.getAllTopics()
-        val systemPrompt = """
-            You are InfiniteBook AI's Lead Author.
-            Writing ${book.language} book: "${book.title}" (Genre: ${book.bookTypes}).
-            Reader Level: ${book.readerLevel}.
-            
-            STRICT UNIQUE-CONTENT RULES:
-            1. Already covered topics in this book: $coveredSummary
-            2. DO NOT repeat these concepts, phrases, examples, or scene beats.
-            3. Generate genuinely new, substantive, and original prose for Chapter $chNum Section $secNum: "${nextSection.sectionTitle}".
-            4. Page Quota: Write at least 420-500 words of rich, deep, complete text. No placeholders, no summaries, no empty padding.
-        """.trimIndent()
+        val systemPrompt = if (Prompts.isMarathi(book.language)) {
+            Prompts.MARATHI_FORCE_SYSTEM_PROMPT
+        } else {
+            """
+                ${Prompts.buildLanguageDirective(book.language)}
 
-        val userPrompt = """
+                You are InfiniteBook AI's Lead Author.
+                Writing ${book.language} book: "${book.title}" (Genre: ${book.bookTypes}).
+                Reader Level: ${book.readerLevel}.
+                
+                STRICT UNIQUE-CONTENT RULES:
+                1. Already covered topics in this book: $coveredSummary
+                2. DO NOT repeat these concepts, phrases, examples, or scene beats.
+                3. Generate genuinely new, substantive, and original prose for Chapter $chNum Section $secNum: "${nextSection.sectionTitle}".
+                4. Page Quota: Write at least 420-500 words of rich, deep, complete text. No placeholders, no summaries, no empty padding.
+            """.trimIndent()
+        }
+
+        val userPrompt = if (Prompts.isMarathi(book.language)) {
+            """
+            ${Prompts.buildLanguageDirective(book.language)}
+
+            प्रकरण $chNum: "${nextSection.chapterTitle}"
+            भाग $secNum: "${nextSection.sectionTitle}"
+            उद्दिष्ट: ${nextSection.sectionGoal}
+            
+            किमान ४५०-५०० शब्दांचे सखोल, समृद्ध आणि अस्सल कोल्हापुरी / पुणेकर शैलीतील शुद्ध मराठी देवनागरी साहित्य लिहा. इंग्रजी शब्द अजिबात वापरू नका.
+            """.trimIndent()
+        } else {
+            """
+            ${Prompts.buildLanguageDirective(book.language)}
+
             Chapter $chNum: "${nextSection.chapterTitle}"
             Section $secNum: "${nextSection.sectionTitle}"
             Thematic Goal: ${nextSection.sectionGoal}
             
-            Produce the full substantive page prose (400-500 words minimum) now.
-        """.trimIndent()
+            Produce the full substantive page prose (400-500 words minimum) now in ${book.language}.
+            """.trimIndent()
+        }
 
         var generatedText = callGemini(systemPrompt, userPrompt, apiKey, temperature = 0.75)
         if (generatedText.isBlank()) {
@@ -271,13 +311,27 @@ class BookGenerator(
             Log.w("BookGenerator", "Duplicate detected for Page $pageNum. Retrying with temperature 0.9...")
             onProgress(pageNum, totalPages, chNum, secNum, "Duplicate detected! Retrying from fresh angle (Temp 0.9, attempt $retryCount)...")
 
-            val altAnglePrompt = """
+            val altAnglePrompt = if (Prompts.isMarathi(book.language)) {
+                """
+                ${Prompts.buildLanguageDirective(book.language)}
+
+                वेगळ्या दृष्टिकोनातून लेखन करा:
+                मागील मजकुरात पुनरावृत्ती आढळली आहे.
+                पर्यायी दृष्टिकोन वापरा: ${nextSection.alternativeAnglesJson}.
+                नवीन तपशील, अद्वितीय ऐतिहासिक नोंदी, संवाद आणि प्रसंग अस्सल मराठी देवनागरीत तयार करा. इंग्रजी शब्द वापरू नका.
+                किमान शब्द संख्या: ४५० शब्द.
+                """.trimIndent()
+            } else {
+                """
+                ${Prompts.buildLanguageDirective(book.language)}
+
                 GENERATE COMPLETELY DIFFERENT ANGLE:
                 The previous draft contained overlapping phrases or themes.
                 Explore alternative perspectives: ${nextSection.alternativeAnglesJson}.
-                Introduce brand-new specific details, unique terminology, dialogue, and dramatic discoveries.
+                Introduce brand-new specific details, unique terminology, dialogue, and dramatic discoveries in ${book.language}.
                 Minimum words: 450 words.
-            """.trimIndent()
+                """.trimIndent()
+            }
 
             generatedText = callGemini(systemPrompt, "$userPrompt\n\n$altAnglePrompt", apiKey, temperature = 0.90)
             if (generatedText.isBlank()) {
@@ -456,16 +510,36 @@ class BookGenerator(
         }
 
         // Generate brand new unique prose for this section
-        val prompt = """
+        val systemPrompt = if (Prompts.isMarathi(book.language)) {
+            Prompts.MARATHI_FORCE_SYSTEM_PROMPT
+        } else {
+            "You are InfiniteBook AI. Write completely unique prose."
+        }
+
+        val prompt = if (Prompts.isMarathi(book.language)) {
+            """
+            ${Prompts.buildLanguageDirective(book.language)}
+
+            पृष्ठ $pageNumber (प्रकरण ${targetSection.chapterNumber} भाग ${targetSection.sectionNumber}) पुनर्लेखन:
+            पूर्वीच्या मसुद्यात पुनरावृत्ती आढळली होती.
+            नवीन, स्वतंत्र दृष्टिकोनातून संपूर्ण नवीन मजकूर लिहा.
+            विषय: ${targetSection.sectionTitle} (${targetSection.sectionGoal})
+            किमान शब्द: ४५० शब्द. शुद्ध मराठी देवनागरीत लिहा.
+            """.trimIndent()
+        } else {
+            """
+            ${Prompts.buildLanguageDirective(book.language)}
+
             REGENERATION DIRECTIVE FOR PAGE $pageNumber (Ch. ${targetSection.chapterNumber} Sec. ${targetSection.sectionNumber}):
             The previous text had duplicate similarity.
             Generate completely original text from a brand new narrative angle.
             Already covered topics: ${registry.getAllTopics()}
             Topic: ${targetSection.sectionTitle} (${targetSection.sectionGoal})
-            Target Words: 450 words minimum.
-        """.trimIndent()
+            Target Words: 450 words minimum in ${book.language}.
+            """.trimIndent()
+        }
 
-        var freshProse = callGemini("You are InfiniteBook AI. Write completely unique prose.", prompt, apiKey, temperature = 0.92)
+        var freshProse = callGemini(systemPrompt, prompt, apiKey, temperature = 0.92)
         if (freshProse.isBlank() || registry.isDuplicate(freshProse)) {
             freshProse = generateSubstantiveStudioProse(book, targetSection, registry, retryCount = 99)
         }
@@ -533,6 +607,20 @@ class BookGenerator(
     }
 
     private fun getFallbackChapterTitle(book: BookEntity, chapterNumber: Int): String {
+        if (Prompts.isMarathi(book.language)) {
+            val marathiTitles = listOf(
+                "सह्याद्रीची साक्ष आणि ऐतिहासिक आरंभ", "जुन्या मोडी दस्तऐवजांचे गूढ",
+                "शिवकालीन मुत्सद्देगिरी आणि रणनीती", "गडकोटांचे रहस्य आणि बुरुजांची साक्ष",
+                "रयतेचा स्वाभिमान आणि स्वातंत्र्यलढा", "राजदरबारातील खलबते आणि गुप्त मसलत",
+                "संस्कृती, परंपरा आणि शौर्याचा वारसा", "स्वाभिमानाची मशाल आणि बलिदान",
+                "कोल्हापूर आणि पुण्याच्या इतिहासाचे पैलू", "परकीय आक्रमणे आणि प्रतिवाद",
+                "सुवर्णयुगाची वाटचाल आणि नवभारताची स्वप्ने", "अमृतमहोत्सवी विजय आणि संकल्पाची सिद्धी",
+                "मावळातील वीरगाथा आणि संघटन", "साहित्याची गौरवशाली परंपरा",
+                "मातीशी जुळलेली नाळ आणि अस्मिता"
+            )
+            val base = marathiTitles.getOrNull((chapterNumber - 1) % marathiTitles.size) ?: "प्रकरण $chapterNumber"
+            return "प्रकरण $chapterNumber: $base"
+        }
         val titles = listOf(
             "The Threshold of Antiquity", "Whispers of Forgotten Cartography",
             "The Archival Conclave", "Echoes from the Citadel",
@@ -559,6 +647,24 @@ class BookGenerator(
         sectionNumber: Int,
         totalSections: Int
     ): String {
+        if (Prompts.isMarathi(book.language)) {
+            val marathiSections = listOf(
+                "प्रस्तावना आणि ऐतिहासिक संदर्भ",
+                "सीमाभागातील नवीन पुरावे",
+                "मोडी कागदपत्रांचे गूढ वाचन",
+                "प्रत्यक्षदर्शींचे अनुभव आणि नोंद",
+                "भूगोलाची मांडणी आणि संरक्षण योजना",
+                "राजकीय खलबते आणि अंतिम निर्णय",
+                "सत्तासंघर्षाची नवी समीकरणे",
+                "अपेक्षित व अनपेक्षित घडामोडींचा पट",
+                "तत्त्वज्ञानाची आणि मूल्यांची लढाई",
+                "कळसाध्याय आणि निर्णायक वळण",
+                "रयतेच्या मनातील आशा आणि उमेद",
+                "इतिहासाचा निष्कर्ष आणि शिकवण"
+            )
+            val sec = marathiSections[(sectionNumber - 1) % marathiSections.size]
+            return "$sec (प्रकरण $chapterNumber, भाग $sectionNumber)"
+        }
         val sectionTypes = listOf(
             "Genesis and Contextual Foundations",
             "The Discovery at the Outskirts",
@@ -584,6 +690,9 @@ class BookGenerator(
         sectionTitle: String,
         sectionNumber: Int
     ): String {
+        if (Prompts.isMarathi(book.language)) {
+            return "या भागामध्ये $sectionTitle या विषयावर अस्सल कोल्हापुरी व पुणेकर शैलीत सखोल भाष्य, प्रसंगचित्रण आणि संवाद निर्माण करा."
+        }
         return "Develop substantive analysis, scene tension, historical fidelity, and character depth for $sectionTitle."
     }
 
@@ -605,6 +714,26 @@ class BookGenerator(
         registry: ContentRegistry,
         retryCount: Int = 0
     ): String {
+        if (Prompts.isMarathi(book.language)) {
+            val mp1 = """
+                सह्याद्रीच्या उत्तुंग कड्यांवरून वाहणाऱ्या वाऱ्यात एक गूढ आणि ऐतिहासिक कंप जाणवत होता. '${book.title}' या महाग्रंथाच्या १२ व्या अध्यायातील '${section.sectionTitle}' हा भाग एका अत्यंत निर्णायक वळणावर भाष्य करतो. या कालखंडातील जुने दस्तऐवज, मोडी लिपीतील तहनामे आणि स्थानिक जाणकारांच्या साक्षी पुष्टी देतात की त्या काळी घडलेल्या घटना केवळ तात्कालिक नव्हत्या, तर त्यामागे दूरगामी विचार आणि स्वाभिमानाची ठिणगी होती. सूर्योदयाच्या वेळी गडकोटांच्या बुरुजांवरून दूरवर पसरलेल्या मावळातील हालचाली स्पष्ट दिसत होत्या.
+            """.trimIndent()
+
+            val mp2 = """
+                ${section.sectionGoal} या विषयाचे गांभीर्य लक्षात घेता, कोल्हापूर आणि पुण्याच्या ऐतिहासिक संदर्भांचा सखोल अभ्यास करणे आवश्यक ठरते. शिवकालीन व पेशवेकालीन पत्रव्यवहारावरून स्पष्ट होते की त्या वेळचे मुत्सद्देगिरीचे डावपेच अत्यंत काटेकोर आणि सावधगिरीने आखले गेले होते. सैन्याची रसद, घोडदळाची सज्जता आणि गुप्तहेरांचे जाळे इतके अचूक होते की शत्रूच्या हालचालींची खबर क्षणाक्षणाला मुख्यालयात पोहोचत असे. वाड्यातील सदर भरली होती आणि अनुभवी कारभारी राज्याच्या संरक्षणासाठी अहोरात्र चर्चा करत होते.
+            """.trimIndent()
+
+            val mp3 = """
+                या ऐतिहासिक प्रसंगातील मानवी भावभावनांचा विचार करता, तेथील वीरांचे आणि सामान्य रयतेचे मनोबल अद्वितीय होते. जुन्या देवळांच्या गाभाऱ्यात तेवणाऱ्या नंदादीपांच्या मंद प्रकाशात त्यांनी घेतलेल्या शपथा आजही अंगावर रोमांच उभे करतात. 'आपली माती आणि आपला धर्म यांच्या रक्षणासाठी प्राणपणाने लढणे हाच आपला धर्म आहे,' हा विचार प्रत्येकाच्या मनात पक्का रुजलेला होता. साहित्यातील हा प्रसंग केवळ ऐतिहासिक नोंद नसून शौर्य आणि त्यागाची एक ज्वलंत गाथा आहे.
+            """.trimIndent()
+
+            val mp4 = """
+                अशा प्रकारे, '${section.sectionTitle}' या भागाचा समारोप करताना हे अधोरेखित होते की सत्य, निष्ठा आणि रणनीती यांचा संगमच इतिहास घडवतो. पुढील प्रकरणाकडे वाटचाल करताना, या प्रसंगाने निर्माण केलेले नवे प्रश्न आणि उद्भवलेली आव्हाने वाचकाला विचार करण्यास प्रवृत्त करतात. सह्याद्रीच्या कुशीत उमटलेले हे शब्द काळाच्या ओघात कधीही पुसले जाणार नाहीत, हीच या ग्रंथाची खरी ताकद आहे.
+            """.trimIndent()
+
+            return "$mp1\n\n$mp2\n\n$mp3\n\n$mp4"
+        }
+
         val p1 = """
             Within the expansive annals of ${book.title}, Chapter ${section.chapterNumber} marks an inflection point with ${section.sectionTitle}. The archival records preserved from this period underscore a profound transformation in how the surrounding terrain, institutional factions, and central figures navigated escalating tensions. Every documented artifact, architectural fragment, and diplomatic dispatch reveals that the consensus once held by the governing elders was rapidly eroding under the weight of newly unearthed evidence. The air in the central courtyards remained heavy with anticipation as observers documented the movement of emissaries across the outer frontiers.
         """.trimIndent()

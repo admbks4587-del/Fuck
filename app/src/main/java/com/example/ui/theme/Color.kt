@@ -17,6 +17,7 @@ val ParchmentMuted = Color(0xFF94A3B8)
 val SlateDivider = Color(0xFF1E293B)
 
 val AmberAccent = Color(0xFFF59E0B)
+val SaffronAccent = Color(0xFFFF9933)
 val CrimsonAccent = Color(0xFFEF4444)
 val EmeraldSuccess = Color(0xFF10B981)
 val CyanAccent = Color(0xFF06B6D4)

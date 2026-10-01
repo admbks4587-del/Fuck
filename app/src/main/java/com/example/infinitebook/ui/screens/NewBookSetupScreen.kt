@@ -20,6 +20,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Translate
+import com.example.infinitebook.data.ai.Prompts
+import com.example.ui.theme.SaffronAccent
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -482,6 +485,50 @@ fun NewBookSetupScreen(
                             selectedOption = selectedLanguageMode,
                             onSelect = { selectedLanguageMode = it }
                         )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Surface(
+                            color = if (Prompts.isMarathi(selectedLanguage)) SaffronAccent.copy(alpha = 0.2f) else com.example.ui.theme.StudioCardBg,
+                            shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.5.dp,
+                                if (Prompts.isMarathi(selectedLanguage)) SaffronAccent else com.example.ui.theme.GoldPrimary
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("selected_language_chip")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Translate,
+                                    contentDescription = "Language",
+                                    tint = if (Prompts.isMarathi(selectedLanguage)) SaffronAccent else com.example.ui.theme.GoldPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = if (Prompts.isMarathi(selectedLanguage)) "भाषा: मराठी" else "भाषा: $selectedLanguage",
+                                        style = MaterialTheme.typography.titleSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (Prompts.isMarathi(selectedLanguage)) SaffronAccent else com.example.ui.theme.ParchmentWhite
+                                        )
+                                    )
+                                    if (Prompts.isMarathi(selectedLanguage)) {
+                                        Text(
+                                            text = "शुद्ध मराठी देवनागरी • १००% अस्सल कोल्हापुरी / पुणेकर शैली",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = com.example.ui.theme.GoldLight,
+                                                fontSize = 11.sp
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
